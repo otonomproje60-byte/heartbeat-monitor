@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /cli-wrapper
+
+Sitemap: http://77.90.53.243:5002/sitemap.xml

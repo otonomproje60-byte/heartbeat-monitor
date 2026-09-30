@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  heartbeat-monitor:
+    build:
+      context: ./source
+      dockerfile: Dockerfile
+    container_name: heartbeat-monitor
+    restart: unless-stopped
+    ports:
+      - "5002:5000"
+    volumes:
+      - heartbeat_data:/data
+    environment:
+      - DATABASE=/data/heartbeat.db
+      - SECRET_KEY=${SECRET_KEY:-}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_TO=${SMTP_TO:-}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - DEFAULT_GRACE_PERIOD=${DEFAULT_GRACE_PERIOD:-3600}
+      - DEFAULT_ALERT_EVENTS=${DEFAULT_ALERT_EVENTS:-overdue,failed}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  heartbeat_data:
+    driver: local

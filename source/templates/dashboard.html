@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heartbeat Monitor</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #ddd; }
+        h1 { font-size: 1.8rem; color: #333; }
+        .header-actions { display: flex; gap: 10px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .btn-secondary:hover { background: #4b5563; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: flex-start; }
+        .card-header h3 { font-size: 1.1rem; font-weight: 600; color: #1f2937; }
+        .status-badge { padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .status-ok { background: #dcfce7; color: #166534; }
+        .status-late { background: #fef3c7; color: #92400e; }
+        .status-overdue { background: #fee2e2; color: #991b1b; }
+        .status-failed { background: #fee2e2; color: #991b1b; }
+        .status-pending { background: #e5e7eb; color: #374151; }
+        .card-body { padding: 20px; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.875rem; }
+        .info-label { color: #6b7280; }
+        .info-value { color: #1f2937; font-weight: 500; font-family: monospace; }
+        .card-footer { padding: 12px 20px; border-top: 1px solid #eee; display: flex; gap: 8px; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; }
+        .empty-state h2 { margin-bottom: 10px; color: #374151; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; border-radius: 8px; padding: 24px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-title { font-size: 1.25rem; font-weight: 600; }
+        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280; }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.875rem; }
+        .form-input { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; }
+        .form-input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-help { font-size: 0.75rem; color: #6b7280; margin-top: 4px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+        .token-display { background: #f3f4f6; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.85rem; word-break: break-all; margin-bottom: 16px; }
+        .token-display code { background: none; padding: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💓 Heartbeat Monitor</h1>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="showCliHelp()">CLI Wrapper</button>
+                <button class="btn btn-primary" onclick="openCreateModal()">Add Job</button>
+            </div>
+        </header>
+        
+        <div id="jobsGrid" class="grid"></div>
+        
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <h2>No jobs configured</h2>
+            <p>Create your first job to start monitoring cron jobs and backup scripts.</p>
+            <button class="btn btn-primary" onclick="openCreateModal()" style="margin-top: 16px;">Create Job</button>
+        </div>
+    </div>
+
+    <!-- Create Job Modal -->
+    <div id="createModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Create New Job</h2>
+                <button class="modal-close" onclick="closeCreateModal()">&times;</button>
+            </div>
+            <form id="createForm">
+                <div class="form-group">
+                    <label class="form-label">Job Name</label>
+                    <input type="text" class="form-input" name="name" placeholder="e.g., daily-backup" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Interval (seconds)</label>
+                        <input type="number" class="form-input" name="interval_seconds" placeholder="86400" min="60" required>
+                        <div class="form-help">How often the job should run (e.g., 86400 = daily, 3600 = hourly)</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Grace Period (seconds)</label>
+                        <input type="number" class="form-input" name="grace_period_seconds" placeholder="3600" min="0" value="3600">
+                        <div class="form-help">Extra time before marking overdue</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <textarea class="form-input" name="description" rows="2" placeholder="What does this job do?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Alert Events</label>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.875rem;">
+                            <input type="checkbox" name="alert_events" value="overdue" checked> Overdue
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 0.875rem;">
+                            <input type="checkbox" name="alert_events" value="failed" checked> Failed
+                        </label>
+                    </div>
+                </div>
+                <details style="margin-top: 16px;">
+                    <summary style="cursor: pointer; font-weight: 500;">Alert Configuration (Optional)</summary>
+                    <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 6px;">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Telegram Bot Token</label>
+                                <input type="text" class="form-input" name="telegram_bot_token" placeholder="123456:ABC-DEF...">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Telegram Chat ID</label>
+                                <input type="text" class="form-input" name="telegram_chat_id" placeholder="-1001234567890">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Discord Webhook URL</label>
+                            <input type="text" class="form-input" name="discord_webhook" placeholder="https://discord.com/api/webhooks/...">
+                        </div>
+                        <details style="margin-top: 12px;">
+                            <summary style="cursor: pointer; font-weight: 500;">Email (SMTP)</summary>
+                            <div style="margin-top: 12px;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">SMTP Host</label>
+                                        <input type="text" class="form-input" name="smtp_host" placeholder="smtp.gmail.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">SMTP Port</label>
+                                        <input type="number" class="form-input" name="smtp_port" placeholder="587" value="587">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">SMTP User</label>
+                                        <input type="text" class="form-input" name="smtp_user" placeholder="user@gmail.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">SMTP Password</label>
+                                        <input type="password" class="form-input" name="smtp_password" placeholder="app password">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">From</label>
+                                        <input type="email" class="form-input" name="smtp_from" placeholder="alerts@example.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">To</label>
+                                        <input type="email" class="form-input" name="smtp_to" placeholder="admin@example.com">
+                                    </div>
+                                </div>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.875rem; margin-top: 8px;">
+                                    <input type="checkbox" name="smtp_tls" checked> TLS
+                                </label>
+                            </div>
+                        </details>
+                    </div>
+                </details>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Job</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Token Display Modal -->
+    <div id="tokenModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Job Created Successfully</h2>
+                <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+            </div>
+            <p>Save this token securely. It cannot be shown again.</p>
+            <div class="token-display">
+                <code id="newToken"></code>
+            </div>
+            <div class="form-help">Use this token in your cron job: <code>curl -X POST {{BASE_URL}}/api/heartbeat/<token> -H "Content-Type: application/json" -d '{"status":"success"}'</code></div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="closeTokenModal()">Copy & Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_TOKEN = '{{ admin_token }}';
+        const BASE_URL = window.location.origin;
+        
+        async function apiRequest(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                'X-Admin-Token': ADMIN_TOKEN,
+                ...options.headers
+            };
+            const response = await fetch(`${BASE_URL}${endpoint}`, {
+                ...options,
+                headers
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Request failed' }));
+                throw new Error(error.error || `HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function renderJobs(jobs) {
+            const grid = document.getElementById('jobsGrid');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (jobs.length === 0) {
+                grid.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            grid.innerHTML = jobs.map(job => `
+                <div class="card" onclick="window.location.href='/job/${job.id}'">
+                    <div class="card-header">
+                        <h3>${escapeHtml(job.name)}</h3>
+                        <span class="status-badge status-${job.current_status}">${job.current_status}</span>
+                    </div>
+                    <div class="card-body">
+                        ${job.description ? `<div class="info-row"><span class="info-label">Description</span><span class="info-value">${escapeHtml(job.description)}</span></div>` : ''}
+                        <div class="info-row"><span class="info-label">Interval</span><span class="info-value">${formatInterval(job.interval_seconds)}</span></div>
+                        <div class="info-row"><span class="info-label">Grace Period</span><span class="info-value">${formatInterval(job.grace_period_seconds)}</span></div>
+                        <div class="info-row"><span class="info-label">Last Run</span><span class="info-value">${job.last_run ? formatDateTime(job.last_run.timestamp) : 'Never'}</span></div>
+                        ${job.last_run ? `
+                            <div class="info-row"><span class="info-label">Status</span><span class="info-value">${job.last_run.status}</span></div>
+                            ${job.last_run.duration_ms ? `<div class="info-row"><span class="info-label">Duration</span><span class="info-value">${job.last_run.duration_ms}ms</span></div>` : ''}
+                            ${job.last_run.exit_code !== null && job.last_run.exit_code !== 0 ? `<div class="info-row"><span class="info-label">Exit Code</span><span class="info-value">${job.last_run.exit_code}</span></div>` : ''}
+                        ` : ''}
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-secondary" onclick="event.stopPropagation(); deleteJob('${job.id}')" style="flex: 1;">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatInterval(seconds) {
+            if (seconds >= 86400) return `${seconds / 86400} day${seconds !== 86400 ? 's' : ''}`;
+            if (seconds >= 3600) return `${seconds / 3600} hour${seconds !== 3600 ? 's' : ''}`;
+            if (seconds >= 60) return `${seconds / 60} min${seconds !== 60 ? 's' : ''}`;
+            return `${seconds}s`;
+        }
+
+        function formatDateTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        }
+
+        async function loadJobs() {
+            try {
+                const jobs = await apiRequest('/api/jobs');
+                renderJobs(jobs);
+            } catch (error) {
+                console.error('Failed to load jobs:', error);
+                alert('Failed to load jobs: ' + error.message);
+            }
+        }
+
+        function openCreateModal() {
+            document.getElementById('createModal').classList.add('active');
+        }
+
+        function closeCreateModal() {
+            document.getElementById('createModal').classList.remove('active');
+            document.getElementById('createForm').reset();
+        }
+
+        function closeTokenModal() {
+            document.getElementById('tokenModal').classList.remove('active');
+        }
+
+        document.getElementById('createForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            // Convert checkboxes to array
+            data.alert_events = formData.getAll('alert_events');
+            data.interval_seconds = parseInt(data.interval_seconds);
+            data.grace_period_seconds = parseInt(data.grace_period_seconds);
+            data.smtp_port = parseInt(data.smtp_port) || 587;
+            data.smtp_tls = data.smtp_tls === 'on';
+            
+            // Remove empty strings
+            Object.keys(data).forEach(key => {
+                if (data[key] === '' || (Array.isArray(data[key]) && data[key].length === 0)) {
+                    delete data[key];
+                }
+            });
+            
+            try {
+                const result = await apiRequest('/api/jobs', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                
+                closeCreateModal();
+                
+                // Show token modal
+                document.getElementById('newToken').textContent = result.token;
+                document.getElementById('tokenModal').classList.add('active');
+                
+                loadJobs();
+            } catch (error) {
+                alert('Failed to create job: ' + error.message);
+            }
+        });
+
+        async function deleteJob(jobId) {
+            if (!confirm('Delete this job and all its history?')) return;
+            try {
+                await apiRequest(`/api/jobs/${jobId}`, { method: 'DELETE' });
+                loadJobs();
+            } catch (error) {
+                alert('Failed to delete job: ' + error.message);
+            }
+        }
+
+        function showCliHelp() {
+            alert(`CLI Wrapper Usage:
+
+# Download and install
+curl -fsSL ${BASE_URL}/cli-wrapper | sh
+
+# Or save manually and make executable
+# Then use:
+hb run --job <job_name> -- /path/to/your/script.sh
+
+The wrapper will:
+1. Send "started" heartbeat before running
+2. Run your command
+3. Send "success" or "failed" heartbeat after completion
+
+Job tokens are configured in the web UI.`);
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadJobs, 30000);
+        
+        // Initial load
+        loadJobs();
+    </script>
+</body>
+</html>
