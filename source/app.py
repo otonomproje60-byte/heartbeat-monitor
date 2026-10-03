@@ -386,6 +386,12 @@ def healthz():
     return jsonify({'status': 'healthy', 'database': 'connected'})
 
 
+@app.route('/health')
+def health():
+    """Health check endpoint (alternative path)."""
+    return jsonify({'status': 'healthy', 'database': 'connected'})
+
+
 @app.route('/api/heartbeat/<token>', methods=['POST'])
 def receive_heartbeat(token):
     """Receive a heartbeat from a job."""

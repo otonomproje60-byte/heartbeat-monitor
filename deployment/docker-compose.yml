@@ -3,7 +3,7 @@ version: '3.8'
 services:
   heartbeat-monitor:
     build:
-      context: ./source
+      context: ../source
       dockerfile: Dockerfile
     container_name: heartbeat-monitor
     restart: unless-stopped
